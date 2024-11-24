@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import pickle
+
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.ensemble import RandomForestClassifier
@@ -12,6 +13,7 @@ import matplotlib.pyplot as plt
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from joblib import load
+import shap
 # Función para cargar datos
 def load_data(uploaded_file):
     if uploaded_file is not None:
@@ -100,7 +102,6 @@ def procesar_nueva_data(df):
         column_transformer = load('column_transformer.joblib')
         data_transformed = column_transformer.transform(df)
         columns = column_transformer.get_feature_names_out()
-        st.write(f"**{columns}**")
         data_transformed_df = pd.DataFrame(data_transformed, columns=columns)
 
         columns_to_drop = ['EmploymentStatus', 'EducationLevel', 'MaritalStatus',
@@ -113,34 +114,24 @@ def procesar_nueva_data(df):
 
         # Mostrar las primeras filas del dataframe final
 
-        st.write(f"Probabilidad de No Aprobación: **{data_cleaned.head()}**")
         columns_to_drop2 = [col for col in data_cleaned.columns if col.startswith('remainder_')]
         data_cleaned = data_cleaned.drop(columns=columns_to_drop2)
-        st.write(f"Probabilidad de No Aprobación: **{data_cleaned.head()}**")
         data_cleaned = data_cleaned.drop(columns=['MonthlyIncome'])
-        st.write("Columnas en el DataFrame:")
-        st.write(data_cleaned.columns.tolist())
-        columns_to_normalize = ['NetWorth', 'MonthlyLoanPayment', 'TotalDebtToIncomeRatio',
-                                'AnnualIncome', 'LoanAmount', 'LoanDuration', 'Age',
-                                'CreditScore', 'SavingsAccountBalance', 'CheckingAccountBalance',
-                                'PaymentHistory', 'LenghtOfCreditHistory', 'MonthlyDebtPayments']
+        columns_to_normalize = ['NetWorth',
+                                'TotalDebtToIncomeRatio','AnnualIncome', 'LoanAmount'
+                                , 'LoanDuration', 'MonthlyLoanPayment', 'Age', 'CreditScore',
+                                'SavingsAccountBalance', 'CheckingAccountBalance', 'PaymentHistory'
+                                ,'LengthOfCreditHistory','MonthlyDebtPayments']
         columns_to_normalize = [col for col in columns_to_normalize if col in data_cleaned.columns]
-        st.write(f"Probabilidad de No Aprobación: **{data_cleaned.head()}**")
+
         scaler = load('scaler.joblib')
+        ##Aqui se cae
         data_cleaned[columns_to_normalize] = scaler.transform(data_cleaned[columns_to_normalize])
 
 
 
-        with open('columns_used.pkl', 'rb') as f:
-            columns_used = pickle.load(f)
 
-        # Agregar columnas faltantes con 0
-        for col in columns_used:
-            if col not in data_cleaned.columns:
-                data_cleaned[col] = 0
 
-        # Ordenar columnas en el mismo orden que en el entrenamiento
-        data_cleaned = data_cleaned[columns_used]
 
         return data_cleaned
 
@@ -149,7 +140,7 @@ def procesar_nueva_data(df):
         return None
 # Streamlit Dashboard
 def main():
-    st.title("Dashboard de Riesgo Financiero para aprobación de ")
+    st.title("Dashboard de Riesgo Financiero para aprobación de prestamos bancario ")
     st.write("Este dashboard permite cargar datos de un cliente para la decision de brindarle un prestamo")
 
     # Paso 1: Cargar datos
@@ -158,9 +149,15 @@ def main():
     with open('modelo_entrenado.pkl', 'rb') as file:
         modelo_cargado = pickle.load(file)
     if data is not None:
+        # Seleccionar un registro específico
+        st.write("Selecciona el índice del registro a analizar:")
+        registro_idx = st.number_input("Índice del registro", min_value=0, max_value=len(data) - 1, step=1, value=0)
+        registro_especifico = data.iloc[[registro_idx]]  # Filtrar el registro seleccionado
+        st.write("### Registro seleccionado:")
+        st.dataframe(registro_especifico)
 
         if st.button("Pocesar  "):
-            nueva_data_procesada = procesar_nueva_data(data)
+            nueva_data_procesada = procesar_nueva_data(registro_especifico)
             prediccion = modelo_cargado.predict(nueva_data_procesada)
             probabilidad = modelo_cargado.predict_proba(nueva_data_procesada)
 
@@ -169,7 +166,30 @@ def main():
             st.write(f"Predicción: **{'Aprobado' if prediccion[0] == 1 else 'No Aprobado'}**")
             st.write(f"Probabilidad de Aprobación: **{probabilidad[0][1]:.2f}**")
             st.write(f"Probabilidad de No Aprobación: **{probabilidad[0][0]:.2f}**")
+            # Paso 2: Visualizar importancia con SHAP
+            st.write("### Explicación del modelo con SHAP")
 
+            # Cargar datos y escalador necesarios para SHAP
+            X_train_balanced = load('X_train_balanced.joblib')  # Datos de entrenamiento balanceados usados
+            explainer = shap.Explainer(modelo_cargado, X_train_balanced)
+
+            # Seleccionar un registro específico del DataFrame procesado
+
+            registro_especifico = nueva_data_procesada.iloc[[0]]
+
+            # Calcular los valores SHAP
+            shap_values = explainer(registro_especifico)
+
+            # Mostrar gráfica de importancia con SHAP
+            st.write(f"### Análisis SHAP para el registro {registro_idx}")
+            st.write(f"Registro procesado:")
+            st.dataframe(registro_especifico)
+
+            fig, ax = plt.subplots()  # Crear una figura y un eje
+            shap.waterfall_plot(shap_values[0, :, prediccion[0]])  # Dibujar el gráfico en el eje
+
+            # Mostrar el gráfico en Streamlit
+            st.pyplot(fig)  # Pasar la figura explícitamente
 
 
 if __name__ == "__main__":
