@@ -91,62 +91,62 @@ def evaluate_model(model, X_test, y_test):
 
 
 def procesar_nueva_data(df):
-    # Eliminar columnas irrelevantes
-    # Convertir la columna ApplicationDate a tipo datetime
-    df['ApplicationDate'] = pd.to_datetime(df['ApplicationDate'])
-
-    # Definir las columnas categóricas
-    categorical_columns = ['EmploymentStatus', 'EducationLevel', 'MaritalStatus', 'HomeOwnershipStatus', 'LoanPurpose']
-
-    # Crear el transformador de columnas
-    column_transformer = load('column_transformer.joblib')
-
-    # Aplicar la transformación
-    data_transformed = column_transformer.transform(df)
-
-    columns = column_transformer.get_feature_names_out()
-    data_transformed_df = pd.DataFrame(data_transformed, columns=columns)
-
-    # Eliminar las columnas originales del dataframe
-    columns_to_drop = ['EmploymentStatus', 'EducationLevel', 'MaritalStatus', 'HomeOwnershipStatus', 'LoanPurpose',
-                       'ApplicationDate', 'RiskScore','LoanApproved']
-    # data_cleaned = df.drop(columns=columns_to_drop
-    data_cleaned = df.drop(columns=columns_to_drop)
-
-    # Agregar las nuevas columnas transformadas al dataframe limpio
-    data_cleaned = pd.concat([data_cleaned, data_transformed_df], axis=1)
-
-    # Asegurarse de que todas las columnas sean numéricas
-    data_cleaned = data_cleaned.apply(pd.to_numeric, errors='ignore')
-    data_cleaned.head()
-    # verficacion de la conversion de los datos
-    numerical_columns = data_cleaned.select_dtypes(include=['int64', 'float64']).columns
-    categorical_columns = data_cleaned.select_dtypes(include=['object', 'category']).columns
-    # Eliminar todas las columnas que comienzan con 'remainder_'
-    columns_to_drop = [col for col in data_cleaned.columns if col.startswith('remainder_')]
-    data_cleaned = data_cleaned.drop(columns=columns_to_drop)
-    data_cleaned = data_cleaned.drop(columns=['MonthlyIncome'])
-    # Mostrar las primeras filas del dataframe final
-    # Con esto los valores
-    columns_to_normalize = ['NetWorth', 'MonthlyLoanPayment', 'TotalDebtToIncomeRatio', 'AnnualIncome', 'LoanAmount',
-                            'LoanDuration', 'MonthlyLoanPayment', 'Age', 'CreditScore', 'SavingAccountBalance',
-                            'CheckingAccountBalance', 'PaymentHistory', 'check_monthly_income', 'SavingsAccountBalance',
-                            'LenghtOfCreditHistory', 'MonthlyDebtPayments']
-    ## Asegurarse de que solo se normalicen las columnas que están presentes
-    columns_to_normalize = [col for col in columns_to_normalize if col in data_cleaned.columns]
-
-# Crear el escalador
-    scaler = load('scaler.joblib')
-
-# Normalizar las columnas seleccionadas
-    data_cleaned[columns_to_normalize] = scaler.transform(data_cleaned[columns_to_normalize])
-
-# Mostrar el dataframe normalizado
+    try:
+        # Convertir columnas y eliminar irrelevantes
+        df['ApplicationDate'] = pd.to_datetime(df['ApplicationDate'])
 
 
-    # Crear DataFrame final
+        # Transformar datos categóricos
+        column_transformer = load('column_transformer.joblib')
+        data_transformed = column_transformer.transform(df)
+        columns = column_transformer.get_feature_names_out()
+        st.write(f"**{columns}**")
+        data_transformed_df = pd.DataFrame(data_transformed, columns=columns)
 
-    return data_cleaned
+        columns_to_drop = ['EmploymentStatus', 'EducationLevel', 'MaritalStatus',
+                           'HomeOwnershipStatus', 'LoanPurpose', 'ApplicationDate',
+                           'RiskScore','LoanApproved']
+        data_cleaned = df.drop(columns=columns_to_drop)
+        data_cleaned = pd.concat([data_cleaned, data_transformed_df], axis=1)
+        data_cleaned = data_cleaned.apply(pd.to_numeric, errors='ignore')
+
+
+        # Mostrar las primeras filas del dataframe final
+
+        st.write(f"Probabilidad de No Aprobación: **{data_cleaned.head()}**")
+        columns_to_drop2 = [col for col in data_cleaned.columns if col.startswith('remainder_')]
+        data_cleaned = data_cleaned.drop(columns=columns_to_drop2)
+        st.write(f"Probabilidad de No Aprobación: **{data_cleaned.head()}**")
+        data_cleaned = data_cleaned.drop(columns=['MonthlyIncome'])
+        st.write("Columnas en el DataFrame:")
+        st.write(data_cleaned.columns.tolist())
+        columns_to_normalize = ['NetWorth', 'MonthlyLoanPayment', 'TotalDebtToIncomeRatio',
+                                'AnnualIncome', 'LoanAmount', 'LoanDuration', 'Age',
+                                'CreditScore', 'SavingsAccountBalance', 'CheckingAccountBalance',
+                                'PaymentHistory', 'LenghtOfCreditHistory', 'MonthlyDebtPayments']
+        columns_to_normalize = [col for col in columns_to_normalize if col in data_cleaned.columns]
+        st.write(f"Probabilidad de No Aprobación: **{data_cleaned.head()}**")
+        scaler = load('scaler.joblib')
+        data_cleaned[columns_to_normalize] = scaler.transform(data_cleaned[columns_to_normalize])
+
+
+
+        with open('columns_used.pkl', 'rb') as f:
+            columns_used = pickle.load(f)
+
+        # Agregar columnas faltantes con 0
+        for col in columns_used:
+            if col not in data_cleaned.columns:
+                data_cleaned[col] = 0
+
+        # Ordenar columnas en el mismo orden que en el entrenamiento
+        data_cleaned = data_cleaned[columns_used]
+
+        return data_cleaned
+
+    except Exception as e:
+        st.error(f"Error durante el procesamiento de los datos: {e}")
+        return None
 # Streamlit Dashboard
 def main():
     st.title("Dashboard de Riesgo Financiero para aprobación de ")
