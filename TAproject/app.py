@@ -1,14 +1,17 @@
 import streamlit as st
 import pandas as pd
+import pickle
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 from imblearn.over_sampling import SMOTE
 import joblib
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 import matplotlib.pyplot as plt
-
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from joblib import load
 # Función para cargar datos
 def load_data(uploaded_file):
     if uploaded_file is not None:
@@ -86,54 +89,88 @@ def evaluate_model(model, X_test, y_test):
     st.subheader("ROC-AUC Score")
     st.write(roc_auc_score(y_test, y_prob))
 
+
+def procesar_nueva_data(df):
+    # Eliminar columnas irrelevantes
+    # Convertir la columna ApplicationDate a tipo datetime
+    df['ApplicationDate'] = pd.to_datetime(df['ApplicationDate'])
+
+    # Definir las columnas categóricas
+    categorical_columns = ['EmploymentStatus', 'EducationLevel', 'MaritalStatus', 'HomeOwnershipStatus', 'LoanPurpose']
+
+    # Crear el transformador de columnas
+    column_transformer = load('column_transformer.joblib')
+
+    # Aplicar la transformación
+    data_transformed = column_transformer.transform(df)
+
+    columns = column_transformer.get_feature_names_out()
+    data_transformed_df = pd.DataFrame(data_transformed, columns=columns)
+
+    # Eliminar las columnas originales del dataframe
+    columns_to_drop = ['EmploymentStatus', 'EducationLevel', 'MaritalStatus', 'HomeOwnershipStatus', 'LoanPurpose',
+                       'ApplicationDate', 'RiskScore','LoanApproved']
+    # data_cleaned = df.drop(columns=columns_to_drop
+    data_cleaned = df.drop(columns=columns_to_drop)
+
+    # Agregar las nuevas columnas transformadas al dataframe limpio
+    data_cleaned = pd.concat([data_cleaned, data_transformed_df], axis=1)
+
+    # Asegurarse de que todas las columnas sean numéricas
+    data_cleaned = data_cleaned.apply(pd.to_numeric, errors='ignore')
+    data_cleaned.head()
+    # verficacion de la conversion de los datos
+    numerical_columns = data_cleaned.select_dtypes(include=['int64', 'float64']).columns
+    categorical_columns = data_cleaned.select_dtypes(include=['object', 'category']).columns
+    # Eliminar todas las columnas que comienzan con 'remainder_'
+    columns_to_drop = [col for col in data_cleaned.columns if col.startswith('remainder_')]
+    data_cleaned = data_cleaned.drop(columns=columns_to_drop)
+    data_cleaned = data_cleaned.drop(columns=['MonthlyIncome'])
+    # Mostrar las primeras filas del dataframe final
+    # Con esto los valores
+    columns_to_normalize = ['NetWorth', 'MonthlyLoanPayment', 'TotalDebtToIncomeRatio', 'AnnualIncome', 'LoanAmount',
+                            'LoanDuration', 'MonthlyLoanPayment', 'Age', 'CreditScore', 'SavingAccountBalance',
+                            'CheckingAccountBalance', 'PaymentHistory', 'check_monthly_income', 'SavingsAccountBalance',
+                            'LenghtOfCreditHistory', 'MonthlyDebtPayments']
+    ## Asegurarse de que solo se normalicen las columnas que están presentes
+    columns_to_normalize = [col for col in columns_to_normalize if col in data_cleaned.columns]
+
+# Crear el escalador
+    scaler = load('scaler.joblib')
+
+# Normalizar las columnas seleccionadas
+    data_cleaned[columns_to_normalize] = scaler.transform(data_cleaned[columns_to_normalize])
+
+# Mostrar el dataframe normalizado
+
+
+    # Crear DataFrame final
+
+    return data_cleaned
 # Streamlit Dashboard
 def main():
-    st.title("Dashboard de Entrenamiento de Modelos")
-    st.write("Este dashboard permite cargar datos, balancearlos con SMOTE, entrenar un modelo de Random Forest y evaluar su desempeño.")
+    st.title("Dashboard de Riesgo Financiero para aprobación de ")
+    st.write("Este dashboard permite cargar datos de un cliente para la decision de brindarle un prestamo")
 
     # Paso 1: Cargar datos
     uploaded_file = st.file_uploader("Sube un archivo CSV", type="csv")
     data = load_data(uploaded_file)
-
+    with open('modelo_entrenado.pkl', 'rb') as file:
+        modelo_cargado = pickle.load(file)
     if data is not None:
-        bins = st.slider("Número de bins en el histograma:", min_value=5, max_value=50, value=10, step=1)
 
-        fig, ax = plt.subplots()
-        data['CreditScore'].hist(bins=bins, ax=ax)
-        ax.set_title("Histograma de Credit Score")
-        ax.set_xlabel("Credit Score")
-        ax.set_ylabel("Frecuencia")
-        st.pyplot(fig)
-        # Paso 2: Seleccionar columna objetivo
-        models = {
-            'Random Forest': RandomForestClassifier(),
-            'Logistic Regression': LogisticRegression(max_iter=500)
-        }
-        target_column = st.selectbox("Selecciona la columna objetivo:", data.columns)
-        modeloSeleccionado = st.selectbox("Selecciona el modelo:", models)
-        x, y = preprocess_data(data, target_column)
+        if st.button("Pocesar  "):
+            nueva_data_procesada = procesar_nueva_data(data)
+            prediccion = modelo_cargado.predict(nueva_data_procesada)
+            probabilidad = modelo_cargado.predict_proba(nueva_data_procesada)
 
-        # Paso 3: Dividir datos
-        X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+            # Mostrar los resultados
+            st.write("### Resultado de la Predicción")
+            st.write(f"Predicción: **{'Aprobado' if prediccion[0] == 1 else 'No Aprobado'}**")
+            st.write(f"Probabilidad de Aprobación: **{probabilidad[0][1]:.2f}**")
+            st.write(f"Probabilidad de No Aprobación: **{probabilidad[0][0]:.2f}**")
 
 
-        # Paso 4: Balancear datos
-        X_train_balanced, y_train_balanced = balance_data(X_train, y_train)
-        if st.button("Pocesar y Entrenar Modelo "):
-                st.write("Distribución de clases después de SMOTE:")
-                st.write(pd.Series(y_train_balanced).value_counts())
-                # Paso 5: Entrenar modelo
-                model = train_model(X_train, y_train, modeloSeleccionado)
-                st.success("Modelo entrenado con éxito.")
-
-                # Paso 6: Evaluar modelo
-                st.subheader("Evaluación del Modelo")
-                evaluate_model(model, X_test, y_test)
-
-                # Paso 7: Guardar modelo
-        if st.button("Guardar Modelo"):
-            joblib.dump(model, "rf_model.pkl")
-            st.success("Modelo guardado como rf_model.pkl")
 
 if __name__ == "__main__":
     main()
