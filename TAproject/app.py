@@ -138,6 +138,70 @@ def procesar_nueva_data(df):
     except Exception as e:
         st.error(f"Error durante el procesamiento de los datos: {e}")
         return None
+
+
+# Función para análisis exploratorio de datos
+def exploratory_data_analysis(data):
+    st.write("## Análisis Exploratorio de Datos 📊")
+
+    # Mostrar información general del conjunto de datos
+    st.write("### Información General")
+    st.write(f"**Número de filas:** {data.shape[0]}")
+    st.write(f"**Número de columnas:** {data.shape[1]}")
+    st.write("### Primeras filas del conjunto de datos:")
+    st.dataframe(data.head())
+
+    # Resumen estadístico
+    st.write("### Resumen Estadístico")
+    st.write(data.describe())
+
+    # Filtrar columnas numéricas
+    numeric_columns = data.select_dtypes(include=['int64', 'float64']).columns
+
+    # Distribución de Variables
+    st.write("### Distribución de Variables")
+    selected_column = st.selectbox(
+        "Selecciona una columna para analizar su distribución:",
+        options=numeric_columns,
+        key="distribution_column"
+    )
+
+    if selected_column:
+        st.write(f"**Distribución de la columna:** {selected_column}")
+        fig, ax = plt.subplots()
+        data[selected_column].hist(bins=20, ax=ax, color="skyblue")
+        ax.set_title(f"Distribución de {selected_column}")
+        ax.set_xlabel(selected_column)
+        ax.set_ylabel("Frecuencia")
+        st.pyplot(fig)
+
+    # Comparación entre dos variables
+    st.write("### Comparación entre dos variables")
+    col1, col2 = st.columns(2)
+
+    # Selección de las dos columnas para comparación
+    with col1:
+        column_x = st.selectbox(
+            "Selecciona la columna para el eje X:",
+            options=numeric_columns,
+            key="x_column_compare"
+        )
+    with col2:
+        column_y = st.selectbox(
+            "Selecciona la columna para el eje Y:",
+            options=numeric_columns,
+            key="y_column_compare"
+        )
+
+    # Verificar que ambas columnas sean válidas
+    if column_x and column_y:
+        st.write(f"Comparando: **X = {column_x}**, **Y = {column_y}**")
+        fig, ax = plt.subplots()
+        ax.scatter(data[column_x], data[column_y], alpha=0.6, c="skyblue", edgecolor="k")
+        ax.set_title(f"Comparación entre {column_x} y {column_y}")
+        ax.set_xlabel(column_x)
+        ax.set_ylabel(column_y)
+        st.pyplot(fig)
 # Streamlit Dashboard
 def main():
     st.title("Dashboard de Riesgo Financiero para aprobación de prestamos bancario ")
@@ -150,6 +214,7 @@ def main():
         modelo_cargado = pickle.load(file)
     if data is not None:
         # Seleccionar un registro específico
+        exploratory_data_analysis(data)
         st.write("Selecciona el índice del registro a analizar:")
         registro_idx = st.number_input("Índice del registro", min_value=0, max_value=len(data) - 1, step=1, value=0)
         registro_especifico = data.iloc[[registro_idx]]  # Filtrar el registro seleccionado
