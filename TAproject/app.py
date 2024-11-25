@@ -146,7 +146,7 @@ def main():
     # Paso 1: Cargar datos
     uploaded_file = st.file_uploader("Sube un archivo CSV", type="csv")
     data = load_data(uploaded_file)
-    with open('modelo_entrenado.pkl', 'rb') as file:
+    with open('TAproject/modelo_entrenado.pkl', 'rb') as file:
         modelo_cargado = pickle.load(file)
     if data is not None:
         # Seleccionar un registro específico
@@ -170,7 +170,7 @@ def main():
             st.write("### Explicación del modelo con SHAP")
 
             # Cargar datos y escalador necesarios para SHAP
-            X_train_balanced = load('X_train_balanced.joblib')  # Datos de entrenamiento balanceados usados
+            X_train_balanced = load('TAproject/X_train_balanced.joblib')  # Datos de entrenamiento balanceados usados
             explainer = shap.Explainer(modelo_cargado, X_train_balanced)
 
             # Seleccionar un registro específico del DataFrame procesado
