@@ -99,7 +99,7 @@ def procesar_nueva_data(df):
 
 
         # Transformar datos categóricos
-        column_transformer = load('column_transformer.joblib')
+        column_transformer = load('TAproject/column_transformer.joblib')
         data_transformed = column_transformer.transform(df)
         columns = column_transformer.get_feature_names_out()
         data_transformed_df = pd.DataFrame(data_transformed, columns=columns)
@@ -124,7 +124,7 @@ def procesar_nueva_data(df):
                                 ,'LengthOfCreditHistory','MonthlyDebtPayments']
         columns_to_normalize = [col for col in columns_to_normalize if col in data_cleaned.columns]
 
-        scaler = load('scaler.joblib')
+        scaler = load('TAproject/scaler.joblib')
         ##Aqui se cae
         data_cleaned[columns_to_normalize] = scaler.transform(data_cleaned[columns_to_normalize])
 
